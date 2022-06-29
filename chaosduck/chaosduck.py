@@ -31,21 +31,6 @@ class NoDaemonProcess(multiprocessing.Process):
 class MyPool(multiprocessing.pool.Pool):
     Process = NoDaemonProcess
 
-
-def create_temperature_readings():
-    file_object = open('temp_readings.txt', 'w')
-    for num in range(0,200000):
-        temp = random.randint(-30, 100)
-        file_object.write(str(temp) + "\n")
-    file_object.close()
-
-def create_light_readings():
-    file_object = open('light_readings.txt', 'w')
-    for num in range(0,16):
-        temp = random.randint(-900, 2250)
-        file_object.write(str(temp) + "\n")
-    file_object.close()
-
 def extract_x86_instructions(infile):
     print("Disassembling the binary and parsing instructions...\n");
     infile = open(infile, 'rb')
@@ -190,8 +175,8 @@ def extract_arm_instructions(infile):
 
 def copy_original_file(infile):
     print(infile)
-    Path("none-extension-multi-faulted-binaries").mkdir(parents=True, exist_ok=True)
-    outfile = 'none-extension-multi-faulted-binaries/'
+    Path("%s-none-faulted-binaries" %(infile)).mkdir(parents=True, exist_ok=True)
+    outfile = "%s-none-faulted-binaries/" %(infile)
     shutil.copy(infile,outfile)
 
 def inject_jump_faults(jumps,allinstr,infile,arch):
@@ -201,25 +186,7 @@ def inject_jump_faults(jumps,allinstr,infile,arch):
     fm_list = []
     jump_targets = [j['to'] for j in jumps]
     jump_targets = list(dict.fromkeys(jump_targets)) # remove duplicates
-    print("The jump_targets array is: ", jump_targets)
-    # try valid jump targets from the existing ones
-    # for jump in jumps:
-    #     for target in jump_targets:
-    #         if target!=jump['to']:
-    #             try:
-    #                 if jump['type'] == ('jmp' or 'b'):
-    #                     fault = {'type':jump['type'],'at':jump['from'],
-    #                         'from':jump['to'],'to':target,
-    #                         'fault':JMP(config, [jump['from'],target])}
-    #                 else:
-    #                     fault = {'type':jump['type'],'at':jump['from'],
-    #                         'from':jump['to'],'to':target,
-    #                         'fault':JBE(config, [jump['from'],target])}
-    #                 fm_list.append(fault)
-    #             except SystemExit:
-    #                 pass # skip targets causing out of range erors and move on
-    # try setting jump targets to all possible instruction addresses
-    # this includes jumping in the middle of an instruction
+    #print("The jump_targets array is: ", jump_targets)
     for idx,jump in enumerate(jumps):
         for target in allinstr:
             if target['addr']!=jump['to']:
@@ -253,11 +220,11 @@ def inject_jump_faults(jumps,allinstr,infile,arch):
 
     print("Number of new binaries with changed jumps: ", len(fm_list))
     # create a folder for faulted binaries
-    Path("jmp-extension-multi-faulted-binaries").mkdir(parents=True, exist_ok=True)
+    Path("%s-jmp-faulted-binaries" %(infile)).mkdir(parents=True, exist_ok=True)
     # Duplicate the input and then apply the faults
     for idx,f in enumerate(fm_list):
         print("Creating jump fault binary ", idx)
-        outfile = 'jmp-extension-multi-faulted-binaries/%s_at_%s_from_%s_to_%s' %(f['type'],
+        outfile = '%s-jmp-faulted-binaries/%s_at_%s_from_%s_to_%s' %(infile, f['type'],
         f['at'],f['from'],f['to'])
         shutil.copy(infile,outfile)
         with open(outfile, "r+b") as file:
@@ -281,11 +248,11 @@ def inject_zero_faults(targets,infile,arch):
     # print("Number of locations to zero: ", len(targets))
     print("Number of new binaries with zeroed values: ", len(fm_list))
     # create a folder for faulted binaries
-    Path("zero-extension-multi-faulted-binaries").mkdir(parents=True, exist_ok=True)
+    Path("%s-zero-faulted-binaries" %(infile)).mkdir(parents=True, exist_ok=True)
     # Duplicate the input and then apply the faults
     for idx,f in enumerate(fm_list):
         print("Creating zero fault binary ", idx)
-        outfile = 'zero-extension-multi-faulted-binaries/%s_at_%s_zeroed' %(f['type'],f['loc'])
+        outfile = '%s-zero-faulted-binaries/%s_at_%s_zeroed' %(infile, f['type'],f['loc'])
         shutil.copy(infile,outfile)
         with open(outfile, "r+b") as file:
             f['fault'].apply(file)
@@ -299,7 +266,7 @@ def inject_nop_faults(targets, infile, arch):
             addr_from = target['addr']
             addr_till = target['addr'] + target['size'] - 1
             noprange = hex(addr_from) + '-' + hex(addr_till)
-            #print("From %x till %x = Range %s" %(addr_from,addr_till,range))
+            print("From %x till %x" %(addr_from,addr_till))
             #print("noprange: ", noprange)
             fault = {'range':noprange, 'fault':NOP(config,[noprange])}
             fm_list.append(fault)
@@ -308,11 +275,11 @@ def inject_nop_faults(targets, infile, arch):
     # print("Number of instructions to be NOPed: ", len(targets))
     print("Number of new binaries with NOPed instructions: ", len(fm_list))
     # create a folder for faulted binaries
-    Path("nop-extension-multi-faulted-binaries").mkdir(parents=True, exist_ok=True)
+    Path("%s-nop-faulted-binaries" %(infile)).mkdir(parents=True, exist_ok=True)
     # Duplicate the input and then apply the faults
     for idx,f in enumerate(fm_list):
         print("Creating NOP fault binary ", idx)
-        outfile = 'nop-extension-multi-faulted-binaries/nop_%s' %f['range']
+        outfile = '%s-nop-faulted-binaries/nop_%s' %(infile, f['range'])
         shutil.copy(infile,outfile)
         with open(outfile, "r+b") as file:
             f['fault'].apply(file)
@@ -341,18 +308,29 @@ def inject_flp_faults(targets, infile, arch):
     # print("Number of instructions to be FLPed: ", len(targets))
     print("Number of new binaries with FLPed instructions: ", len(fm_list))
     # create a folder for faulted binaries
-    Path("flp-extension-multi-faulted-binaries").mkdir(parents=True, exist_ok=True)
+    Path("%s-flp-faulted-binaries" %(infile)).mkdir(parents=True, exist_ok=True)
     # Duplicate the input and then apply the faults
     for idx,f in enumerate(fm_list):
-        print("Creating flip fault binary ", idx)
-        outfile = 'flp-extension-multi-faulted-binaries/flp_at_%s_sgnf_%d' %(f['loc'],f['sgnf'])
-        shutil.copy(infile,outfile)
-        with open(outfile, "r+b") as file:
-            f['fault'].apply(file)
+        try:
+            print("Creating flip fault binary ", idx)
+            outfile = '%s-flp-faulted-binaries/flp_at_%s_sgnf_%d' %(infile, f['loc'],f['sgnf'])
+            shutil.copy(infile,outfile)
+            with open(outfile, "r+b") as file:
+                f['fault'].apply(file)
+        except:
+            continue
 
-def execute_with_each_input(infile, arch, fault_type, batchsize, faulty_binaries_list, row):
+def execute_with_each_input_nova(infile, arch, fault_type, batchsize, faulty_binaries_list, row):
     print("Testing for temperature %s and light %s with index %s" %(row[1], row[2], row[0]))
-    func = partial(execute_file, arch, row[1], row[2], fault_type)  # hack to pass more than 1 argument to execute_file function
+    func = partial(execute_file_nova, "%s-%s-faulted-binaries" %(infile, fault_type), arch, row[1], row[2])
+    execute_with_each_input(infile, fault_type, batchsize, faulty_binaries_list, func, row)
+
+def execute_with_each_input_verifypin(infile, arch, fault_type, batchsize, faulty_binaries_list, row):
+    print("Testing for card_pin %s and user_pin %s with index %s" %(row[1], row[2], row[0]))
+    func = partial(execute_file_verifypin, "%s-%s-faulted-binaries" %(infile, fault_type), arch, row[1], row[2])
+    execute_with_each_input(infile, fault_type, batchsize, faulty_binaries_list, func, row)
+
+def execute_with_each_input(infile, fault_type, batchsize, faulty_binaries_list, func, row):
     for i in range(0, len(faulty_binaries_list), batchsize):
         print("Executing binaries ", i, " : ", i+batchsize)
         batch = faulty_binaries_list[i:i+batchsize]
@@ -360,7 +338,7 @@ def execute_with_each_input(infile, arch, fault_type, batchsize, faulty_binaries
             results = pool.imap(func, batch)
             pool.close()
             try:
-                with open("%s_extension_multi_%s_results.csv" %(infile, fault_type), 'a') as csvfile:
+                with open("%s_%s_results.csv" %(infile, fault_type), 'a') as csvfile:
                     writer = csv.writer(csvfile, delimiter=',')
                     for idx,res in enumerate(results):
                         writer.writerow([infile, res['filename'], row[0], row[1], row[2], res['stdout'], 
@@ -369,83 +347,44 @@ def execute_with_each_input(infile, arch, fault_type, batchsize, faulty_binaries
                 traceback.print_exc()
                 continue
 
-def execute_random_file_with_each_input(infile, arch, fault_type, batch, row):
+def execute_random_file_with_each_input_nova(infile, arch, fault_type, batch, row):
     print("Testing for temperature %s and light %s with index %s" %(row[1], row[2], row[0]))
-    func = partial(execute_file, arch, row[1], row[2], fault_type)  # hack to pass more than 1 argument to execute_file function
-    with Pool() as pool:
+    func = partial(execute_file_nova, "%s-%s-faulted-binaries" %(infile, fault_type), arch, row[1], row[2])
+    execute_random_file_with_each_input(infile, fault_type, batch, func, row)
+
+def execute_random_file_with_each_input_verifypin(infile, arch, fault_type, batch, row):
+    print("Testing for card_pin %s and user_pin %s with index %s" %(row[1], row[2], row[0]))
+    func = partial(execute_file_verifypin, "%s-%s-faulted-binaries" %(infile, fault_type), arch, row[1], row[2])
+    execute_random_file_with_each_input(infile, fault_type, batch, func, row)
+
+def execute_random_file_with_each_input(infile, fault_type, batch, func, row):
+    with Pool(processes=1) as pool:
         results = pool.imap(func, batch)
         pool.close()
         try:
-            with open("%s_extension_multi_%s_results.csv" %(infile, fault_type), 'a') as csvfile:
+             with open("%s_%s_results.csv" %(infile, fault_type), 'a') as csvfile:
                 writer = csv.writer(csvfile, delimiter=',')
-                for idx,res in enumerate(results):
-                    print("type(res): ", type(res))
-                    for item in res.items():
-                        print("Key: ", item[0])
-                        print("Value: ", item[1])
-                    print("-------------------------------------------------------------")
-                        
+                for idx,res in enumerate(results):                        
                     writer.writerow([infile, res['filename'], row[0], row[1], row[2], res['stdout'], 
                                     res['stderr'], res['exitcode'], res['timedout'], fault_type.upper()])
         except:
             traceback.print_exc()
 
-def run_faulty_binaries(infile, arch, fault_type, input_data, batchsize):
-    print("\nRunning the faulty binaries and recording the results...\n")
-    print("This may take a while...\n")
-    '''print("Parsing Data....")
-    with np.printoptions(threshold=sys.maxsize):
-        temperatures = df['temperature'].to_numpy()'''
-    with open("%s_extension_multi_%s_results.csv" %(infile, fault_type), 'w') as csvfile:
-        writer = csv.writer(csvfile, delimiter=',')
-        writer.writerow(['File_Name', 'Faulty_Executable', 'Og_Data_Index', 'Temperature', 'Light', 'Output', 
-                        'Error', 'Exit_Code', 'Time_Out', 'Fault_Type'])
-    faulty_binaries_list = os.listdir("%s-extension-multi-faulted-binaries" %(fault_type))
-    print("Total binaries to execute: ", len(faulty_binaries_list))
-    func_execute_with_each_input = partial(execute_with_each_input, infile, arch, fault_type, 
-                                           batchsize, faulty_binaries_list)
-    for j in range(0, input_data.shape[0], int(input_data.shape[0]/5)):
-        print("Executing inputs ", j, " : ", int(j+(input_data.shape[0]/5)))
-        input_batch = input_data[j:j+int((input_data.shape[0]/5))].to_records()
-        with MyPool() as input_pool:
-            input_results = input_pool.imap(func_execute_with_each_input, input_batch)
-            input_pool.close()
-            list(enumerate(input_results))
-
-def run_faulty_binaries_random(infile, arch, fault_type, input_data, batchsize):
-    print("\nRunning the faulty binaries and recording the results...\n")
-    print("This may take a while...\n")
-    '''print("Parsing Data....")
-    with np.printoptions(threshold=sys.maxsize):
-        temperatures = df['temperature'].to_numpy()'''
-    with open("%s_extension_multi_%s_results.csv" %(infile, fault_type), 'w') as csvfile:
-        writer = csv.writer(csvfile, delimiter=',')
-        writer.writerow(['File_Name', 'Faulty_Executable', 'Og_Data_Index', 'Temperature', 'Light', 'Output', 
-                        'Error', 'Exit_Code', 'Time_Out', 'Fault_Type'])
-    faulty_binaries_list = os.listdir("%s-extension-multi-faulted-binaries" %(fault_type))
-    print("Total binaries to execute: ", len(faulty_binaries_list))
-    for j in range(0, input_data.shape[0], int(input_data.shape[0]/5)):
-        print("Executing inputs ", j, " : ", int(j+(input_data.shape[0]/5)))
-        input_batch = input_data[j:j+int((input_data.shape[0]/5))].to_records()
-        try:
-            with MyPool() as input_pool:
-                i = random.randint(0, len(faulty_binaries_list)-1)
-                print("Executing binaries ", i, " : ", i+batchsize)
-                batch = faulty_binaries_list[i:i+batchsize]
-                func_execute_with_each_input = partial(execute_random_file_with_each_input, infile, arch, fault_type, batch)
-                input_results = input_pool.imap(func_execute_with_each_input, input_batch)
-                input_pool.close()
-                list(enumerate(input_results))
-            map(lambda x: faulty_binaries_list.remove(x), batch)
-        except:
-            traceback.print_exc()
-            continue
-
-def execute_file(arch, temperature, light, fault_type, filename):
+def execute_file_nova(dirname, arch, temperature, light, filename):
     if arch=='x86':
-        command = '%s-extension-multi-faulted-binaries/%s %s %s' %(fault_type, filename, temperature, light)
+        command = '%s/%s %s %s' %(dirname, filename, temperature, light)
     elif arch=='arm':
-        command = 'qemu-arm -L /usr/arm-linux-gnueabi/ %s-extension-multi-faulted-binaries/%s %s %s' %(fault_type, filename, temperature, light)
+        command = 'qemu-arm -L /usr/arm-linux-gnueabi/ %s/%s %s %s' %(dirname, filename, temperature, light)
+    return execute_file(command, filename)
+
+def execute_file_verifypin(dirname, arch, card_pin, user_pin, filename):
+    if arch=='x86':
+        command = '%s/%s %s %s' %(dirname, filename, card_pin, user_pin)
+    elif arch=='arm':
+        command = 'qemu-arm -L /usr/arm-linux-gnueabi/ %s/%s %s %s' %(dirname, filename, card_pin, user_pin)
+    return execute_file(command, filename)
+
+def execute_file(command, filename):
     args = shlex.split(command)
     # p = Popen(args,stdout=PIPE,stderr=PIPE,universal_newlines=True) # extract stdout in a textual utf-8 format
     p = Popen(args,stdout=PIPE,stderr=PIPE) # extract stdout in a binary-like format
@@ -463,13 +402,191 @@ def execute_file(arch, temperature, light, fault_type, filename):
     finally:
         p.kill()
 
+def run_all_faulty_executables_random_input_nova(infile, arch, fault_type, input_data, batchsize=50):
+    print("\nRunning the faulty binaries and recording the results...\n")
+    print("This may take a while...\n")
+    with open("%s_%s_results.csv" %(infile, fault_type), 'w') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',')
+        writer.writerow(['File_Name', 'Faulty_Executable', 'Og_Data_Index', 'Temperature', 'Light', 'Output', 
+                        'Error', 'Exit_Code', 'Time_Out', 'Fault_Type'])
+    faulty_binaries_list = os.listdir("%s-%s-faulted-binaries" %(infile, fault_type))
+    print("Total binaries to execute: ", len(faulty_binaries_list))
+    with open("%s_%s_results.csv" %(infile, fault_type), 'a') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',')
+        for i in range(0, len(faulty_binaries_list), batchsize):
+            print("Executing binaries ", i, " : ", i+batchsize)
+            batch = faulty_binaries_list[i:i+batchsize]
+            j = random.randint(0, (input_data.shape[0])-1)
+            temperature = input_data.iloc[j].temperature
+            light = input_data.iloc[j].light
+            print("Testing for temperature %s and light %s with index %s" %(temperature, light, i))
+            func = partial(execute_file_nova, "%s-%s-faulted-binaries" %(infile, fault_type), arch, temperature, light)
+            with Pool(processes=batchsize) as pool:
+                results = pool.imap(func, batch)
+                pool.close()
+                for idx,res in enumerate(results):                        
+                    writer.writerow([infile, res['filename'], i, temperature, light, res['stdout'], 
+                                        res['stderr'], res['exitcode'], res['timedout'], fault_type.upper()])
+
+def run_faulty_executables_nova(infile, arch, fault_type, input_data, batchsize=50):
+    print("\nRunning the faulty binaries and recording the results...\n")
+    print("This may take a while...\n")
+    with open("%s_%s_results.csv" %(infile, fault_type), 'w') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',')
+        writer.writerow(['File_Name', 'Faulty_Executable', 'Og_Data_Index', 'Temperature', 'Light', 'Output', 
+                        'Error', 'Exit_Code', 'Time_Out', 'Fault_Type'])
+    faulty_binaries_list = os.listdir("%s-%s-faulted-binaries" %(infile, fault_type))
+    print("Total binaries to execute: ", len(faulty_binaries_list))
+    with open("%s_%s_results.csv" %(infile, fault_type), 'a') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',')
+        for index, row in input_data.iterrows():
+            print("Testing for temperature %s and light %s with index %s" %(row['temperature'], row['light'], index))
+            func = partial(execute_file_nova, "%s-%s-faulted-binaries" %(infile, fault_type), arch, row['temperature'], row['light'])
+            for i in range(0, len(faulty_binaries_list), batchsize):
+                print("Executing binaries ", i, " : ", i+batchsize)
+                batch = faulty_binaries_list[i:i+batchsize]
+                with Pool(processes=batchsize) as pool:
+                    results = pool.imap(func, batch)
+                    pool.close()
+                    for idx,res in enumerate(results):                        
+                        writer.writerow([infile, res['filename'], index, row['temperature'], row['light'], res['stdout'], 
+                                        res['stderr'], res['exitcode'], res['timedout'], fault_type.upper()])
+
+def run_faulty_executables_verifypin(infile, arch, fault_type, input_data, batchsize=50):
+    print("\nRunning the faulty binaries and recording the results...\n")
+    print("This may take a while...\n")
+    with open("%s_%s_results.csv" %(infile, fault_type), 'w') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',')
+        writer.writerow(['File_Name', 'Faulty_Executable', 'Og_Data_Index', 'Card_Pin', 'User_Pin', 'Output', 
+                        'Error', 'Exit_Code', 'Time_Out', 'Fault_Type'])
+    faulty_binaries_list = os.listdir("%s-%s-faulted-binaries" %(infile, fault_type))
+    print("Total binaries to execute: ", len(faulty_binaries_list))
+    with open("%s_%s_results.csv" %(infile, fault_type), 'a') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',')
+        for index, row in input_data.iterrows():
+            print("Testing for card_pin %s and user_pin %s with index %s" %(row['card_pin'], row['user_pin'], index))
+            func = partial(execute_file_verifypin, "%s-%s-faulted-binaries" %(infile, fault_type), arch, row['card_pin'], row['user_pin'])
+            for i in range(0, len(faulty_binaries_list), batchsize):
+                print("Executing binaries ", i, " : ", i+batchsize)
+                batch = faulty_binaries_list[i:i+batchsize]
+                with Pool(processes=batchsize) as pool:
+                    results = pool.imap(func, batch)
+                    pool.close()
+                    for idx,res in enumerate(results):                        
+                        writer.writerow([infile, res['filename'], index, row['card_pin'], row['user_pin'], res['stdout'], 
+                                        res['stderr'], res['exitcode'], res['timedout'], fault_type.upper()])
+
+def run_fixed_faulty_executables_nova(infile, arch, fault_type, input_data, faulty_binaries_list, batchsize=50):
+    print("\nRunning the faulty binaries and recording the results...\n")
+    print("This may take a while...\n")
+    with open("%s_%s_results.csv" %(infile, fault_type), 'w') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',')
+        writer.writerow(['File_Name', 'Faulty_Executable', 'Og_Data_Index', 'Temperature', 'Light', 'Output', 
+                        'Error', 'Exit_Code', 'Time_Out', 'Fault_Type'])
+    print("Total binaries: ", len(faulty_binaries_list))
+    input_batch_size = int(input_data.shape[0]/50)
+    for i in range(0, len(faulty_binaries_list), batchsize): 
+        for j in range(0, input_data.shape[0], input_batch_size):
+            print("Executing inputs ", j, " : ", input_batch_size)
+            input_batch = input_data[j : j+input_batch_size].to_records()
+            try:
+                with MyPool(processes=50) as input_pool:
+                    print("Executing binaries ", i, " : ", i+batchsize)
+                    batch = faulty_binaries_list[i:i+batchsize]
+                    func_execute_with_each_input = partial(execute_random_file_with_each_input_nova, infile, arch, fault_type, batch)
+                    input_results = input_pool.imap(func_execute_with_each_input, input_batch)
+                    input_pool.close()
+                    list(enumerate(input_results))
+            except:
+                traceback.print_exc()
+                continue
+
+def run_fixed_faulty_executables_verifypin(infile, arch, fault_type, input_data, faulty_binaries_list, batchsize=50):
+    print("\nRunning the faulty binaries and recording the results...\n")
+    print("This may take a while...\n")
+    with open("%s_%s_results.csv" %(infile, fault_type), 'w') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',')
+        writer.writerow(['File_Name', 'Faulty_Executable', 'Og_Data_Index', 'Card_Pin', 'User_Pin', 'Output', 
+                        'Error', 'Exit_Code', 'Time_Out', 'Fault_Type'])
+    print("Total binaries: ", len(faulty_binaries_list))
+    input_batch_size = int(input_data.shape[0]/50)
+    for i in range(0, len(faulty_binaries_list), batchsize): 
+        for j in range(0, input_data.shape[0], input_batch_size):
+            print("Executing inputs ", j, " : ", input_batch_size)
+            input_batch = input_data[j : j+input_batch_size].to_records()
+            try:
+                with MyPool(processes=50) as input_pool:
+                    print("Executing binaries ", i, " : ", i+batchsize)
+                    batch = faulty_binaries_list[i:i+batchsize]
+                    func_execute_with_each_input = partial(execute_random_file_with_each_input_verifypin, infile, arch, fault_type, batch)
+                    input_results = input_pool.imap(func_execute_with_each_input, input_batch)
+                    input_pool.close()
+                    list(enumerate(input_results))
+            except:
+                traceback.print_exc()
+                continue
+
+def run_random_faulty_executables_nova(infile, arch, fault_type, input_data, batchsize=50):
+    print("\nRunning the faulty binaries and recording the results...\n")
+    print("This may take a while...\n")
+    with open("%s_%s_results.csv" %(infile, fault_type), 'w') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',')
+        writer.writerow(['File_Name', 'Faulty_Executable', 'Og_Data_Index', 'Temperature', 'Light', 'Output', 
+                        'Error', 'Exit_Code', 'Time_Out', 'Fault_Type'])
+    faulty_binaries_list = os.listdir("%s-%s-faulted-binaries" %(infile, fault_type))
+    print("Total binaries: ", len(faulty_binaries_list))
+    input_batch_size = int(input_data.shape[0]/50)
+    for j in range(0, input_data.shape[0], input_batch_size):
+        print("Executing inputs ", j, " : ", input_batch_size)
+        input_batch = input_data[j : j+input_batch_size].to_records()
+        try:
+            with MyPool(processes=50) as input_pool:
+                i = random.randint(0, len(faulty_binaries_list)-1)
+                print("Executing binaries ", i, " : ", i+batchsize)
+                batch = faulty_binaries_list[i:i+batchsize]
+                func_execute_with_each_input = partial(execute_random_file_with_each_input_nova, infile, arch, fault_type, batch)
+                input_results = input_pool.imap(func_execute_with_each_input, input_batch)
+                input_pool.close()
+                list(enumerate(input_results))
+            map(lambda x: faulty_binaries_list.remove(x), batch)
+        except:
+            traceback.print_exc()
+            continue
+
+def run_random_faulty_executables_verifypin(infile, arch, fault_type, input_data, batchsize=50):
+    print("\nRunning the faulty binaries and recording the results...\n")
+    print("This may take a while...\n")
+    with open("%s_%s_results.csv" %(infile, fault_type), 'w') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',')
+        writer.writerow(['File_Name', 'Faulty_Executable', 'Og_Data_Index', 'Card_Pin', 'User_Pin', 'Output', 
+                        'Error', 'Exit_Code', 'Time_Out', 'Fault_Type'])
+    faulty_binaries_list = os.listdir("%s-%s-faulted-binaries" %(infile, fault_type))
+    print("Total binaries: ", len(faulty_binaries_list))
+    input_batch_size = int(input_data.shape[0]/5)
+    for j in range(0, input_data.shape[0], input_batch_size):
+        print("Executing inputs ", j, " : ", input_batch_size)
+        input_batch = input_data[j : j+input_batch_size].to_records()
+        try:
+            with MyPool(processes=50) as input_pool:
+                i = random.randint(0, len(faulty_binaries_list)-1)
+                print("Executing binaries ", i, " : ", i+batchsize)
+                batch = faulty_binaries_list[i:i+batchsize]
+                func_execute_with_each_input = partial(execute_random_file_with_each_input_verifypin, infile, arch, fault_type, batch)
+                input_results = input_pool.imap(func_execute_with_each_input, input_batch)
+                input_pool.close()
+                list(enumerate(input_results))
+            map(lambda x: faulty_binaries_list.remove(x), batch)
+        except:
+            traceback.print_exc()
+            continue
+
 def main(argv):
 
     CLI=argparse.ArgumentParser()
     CLI.add_argument(
         "--filename",
         type=str,
-        default='NovaHomeDaemon_Raspi'
+        default='NovaHomeDaemon_Ext'
     )
     CLI.add_argument(
         "--arch",
@@ -496,44 +613,90 @@ def main(argv):
         allinstr, jumps, cmpsmovs = extract_arm_instructions(infile)
     print("Number of detected instructions: ", len(allinstr))
 
-
+    # Nova Smart Home Control Daemon
     for fault_type in fault_types:
         print("fault_type: ", fault_type)
         if(fault_type=='none'):
             copy_original_file(infile)
             print("Reading Data....")
             col_list = ['temperature', 'light']
-            input_data = pd.read_excel("/media/sf_Code/Intel_Lab_Fault_Annotated.xlsx", sheet_name='No_Fault_Data', usecols=col_list)
+            input_data = pd.read_excel("./Nova_Input_Data.xlsx", sheet_name='Input_Data', usecols=col_list)
             input_data = input_data.dropna()
-            run_faulty_binaries(infile, arch, fault_type, input_data, 1)
+            run_faulty_executables_nova(infile, arch, fault_type, input_data, batch_size=1)
         if(fault_type=='jmp'):
             inject_jump_faults(jumps,allinstr,infile,arch)
             print("Reading Data....")
             col_list = ['temperature', 'light']
-            input_data = pd.read_excel("/media/sf_Code/Intel_Lab_Fault_Annotated.xlsx", sheet_name='Fault_Data', usecols=col_list)
+            input_data = pd.read_excel("./Nova_Input_Data.xlsx", sheet_name='Input_Data', usecols=col_list)
             input_data = input_data.dropna()
-            run_faulty_binaries(infile, arch, fault_type, input_data, 100)
+            run_all_faulty_executables_random_input_nova(infile, arch, fault_type, input_data)
         if(fault_type=='zero'):
             inject_zero_faults(cmpsmovs,infile,arch)
             print("Reading Data....")
             col_list = ['temperature', 'light']
-            input_data = pd.read_excel("/media/sf_Code/Intel_Lab_Fault_Annotated.xlsx", sheet_name='Fault_Data', usecols=col_list)
+            input_data = pd.read_excel("./Nova_Input_Data.xlsx", sheet_name='Input_Data', usecols=col_list)
             input_data = input_data.dropna()
-            run_faulty_binaries(infile, arch, fault_type, input_data, 100)
+            run_all_faulty_executables_random_input_nova(infile, arch, fault_type, input_data)
         if(fault_type=='nop'):
-            #inject_nop_faults(allinstr,infile,arch)
+            inject_nop_faults(allinstr,infile,arch)
             print("Reading Data....")
             col_list = ['temperature', 'light']
-            input_data = pd.read_excel("/media/sf_Code/Intel_Lab_Fault_Annotated.xlsx", sheet_name='No_Fault_Data', usecols=col_list)
+            input_data = pd.read_excel("./Nova_Input_Data.xlsx", sheet_name='Input_Data', usecols=col_list)
             input_data = input_data.dropna()
-            run_faulty_binaries_random(infile, arch, fault_type, input_data, 1)
+            run_all_faulty_executables_random_input_nova(infile, arch, fault_type, input_data)
         if(fault_type=='flp'):
-            #inject_flp_faults(allinstr,infile,arch)
+            inject_flp_faults(allinstr,infile,arch)
             print("Reading Data....")
             col_list = ['temperature', 'light']
-            input_data = pd.read_excel("/media/sf_Code/Intel_Lab_Fault_Annotated.xlsx", sheet_name='Fault_Data', usecols=col_list)
+            input_data = pd.read_excel("./Nova_Input_Data.xlsx", sheet_name='Input_Data', usecols=col_list)
             input_data = input_data.dropna()
-            run_faulty_binaries(infile, arch, fault_type, input_data, 100)
+            '''run_faulty_executables(infile, arch, fault_type, input_data)
+            input_data = input_data[0:40000]
+            run_fixed_faulty_executables(infile, arch, fault_type, input_data, ['flp_at_0x2c8_sgnf_7', 'flp_at_0x1c1c_sgnf_3', 'flp_at_0x1ea8_sgnf_1', 
+                                                                           'flp_at_0x1eac_sgnf_4', 'flp_at_0x1b54_sgnf_7'])'''
+            run_all_faulty_executables_random_input_nova(infile, arch, fault_type, input_data)
+
+
+
+    # VerifyPIN
+    for fault_type in fault_types:
+        print("fault_type: ", fault_type)
+        if(fault_type=='none'):
+            copy_original_file(infile)
+            print("Reading Data....")
+            col_list = ['card_pin', 'user_pin']
+            input_data = pd.read_excel("./VerifyPin_Input_Data.xlsx", sheet_name='Input_Data', usecols=col_list)
+            input_data = input_data.dropna()
+            run_faulty_executables_verifypin(infile, arch, fault_type, input_data, batch_size=1)
+        if(fault_type=='jmp'):
+            inject_jump_faults(jumps,allinstr,infile,arch)
+            print("Reading Data....")
+            col_list = ['card_pin', 'user_pin']
+            input_data = pd.read_excel("./VerifyPin_Input_Data.xlsx", sheet_name='Input_Data', usecols=col_list)
+            input_data = input_data.dropna()
+            run_random_faulty_executables_verifypin(infile, arch, fault_type, input_data)
+        if(fault_type=='zero'):
+            inject_zero_faults(cmpsmovs,infile,arch)
+            print("Reading Data....")
+            col_list = ['card_pin', 'user_pin']
+            input_data = pd.read_excel("./VerifyPin_Input_Data.xlsx", sheet_name='Input_Data', usecols=col_list)
+            input_data = input_data.dropna()
+            run_random_faulty_executables_verifypin(infile, arch, fault_type, input_data)
+        if(fault_type=='nop'):
+            inject_nop_faults(allinstr,infile,arch)
+            print("Reading Data....")
+            col_list = ['card_pin', 'user_pin']
+            input_data = pd.read_excel("./VerifyPin_Input_Data.xlsx", sheet_name='Input_Data', usecols=col_list)
+            input_data = input_data.dropna()
+            run_random_faulty_executables_verifypin(infile, arch, fault_type, input_data)
+        if(fault_type=='flp'):
+            inject_flp_faults(allinstr,infile,arch)
+            print("Reading Data....")
+            col_list = ['card_pin', 'user_pin']
+            input_data = pd.read_excel("./VerifyPin_Input_Data.xlsx", sheet_name='Input_Data', usecols=col_list)
+            input_data = input_data.dropna()
+            input_data = input_data[0:40000]
+            run_fixed_faulty_executables_verifypin(infile, arch, fault_type, input_data, ['flp_at_0xea2_sgnf_6', 'flp_at_0xca2_sgnf_4', 'flp_at_0xdda_sgnf_7', 'flp_at_0xeac_sgnf_7', 'flp_at_0xe39_sgnf_6'])
 
 
 if __name__ == '__main__':
