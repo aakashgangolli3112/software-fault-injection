@@ -4,7 +4,7 @@ This repository contains code to generate a dataset that can be used to train su
 # Usage
 python3 chaosduck.py --filename NovaHomeDaemon_Ext --arch arm --fault_list 'nop' 'flp'
 
-filename - file name of the software executable to inject faults.
+--filename - file name of the software executable to inject faults.
 
 --arch - arch or x86 - hardware architecture for which the software executable was created.
 
