@@ -1,5 +1,5 @@
 # software-fault-injection
-This repository contains code to generate a dataset that can be used to train machine learning models for software fault injection.
+This repository contains code to generate a dataset that can be used to train supervised machine learning models to detect instruction-level software fault injection.
 
 # Usage
 python3 chaosduck.py --filename NovaHomeDaemon_Ext --arch arm --fault_list 'nop' 'flp'
